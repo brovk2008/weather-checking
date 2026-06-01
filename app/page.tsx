@@ -7,15 +7,28 @@ import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
+  Bell,
+  Bike,
+  BookOpen,
+  CalendarDays,
+  Camera,
   Cloud,
+  CloudRain,
   Compass,
   Droplets,
   Eye,
   Gauge,
+  Heart,
+  Home,
   Map,
   Moon,
   Navigation,
+  Plane,
+  Search,
+  Settings,
   ShieldCheck,
+  Sparkles,
+  Star,
   Sun,
   Sunrise,
   Sunset,
@@ -27,37 +40,57 @@ import { DashboardCharts } from "@/components/DashboardCharts";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GaugeGrid } from "@/components/GaugeGrid";
 import { SearchBox } from "@/components/SearchBox";
-import { StatCard } from "@/components/StatCard";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { WeatherJournal } from "@/components/WeatherJournal";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { calculateActivityScores, generateAlerts, generateInsights, getRainRisk } from "@/lib/insights";
 import { fetchWeather, searchLocations } from "@/lib/weatherApi";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { getWeatherVisuals } from "@/lib/weatherImageService";
 import type { Coordinates, GeocodingResult, ThemeName, WeatherBundle } from "@/types/weather";
 
 const WeatherMap = dynamic(() => import("@/components/WeatherMap").then((module) => module.WeatherMap), {
   ssr: false,
-  loading: () => <div className="glass-card grid min-h-[520px] place-items-center rounded-[2rem]">Loading map</div>
+  loading: () => <div className="premium-panel grid min-h-[420px] place-items-center rounded-[1.75rem]">Loading premium map</div>
 });
 
 const defaultLocation: Coordinates = {
-  name: "New Delhi",
-  country: "India",
-  admin1: "Delhi",
-  latitude: 28.6139,
-  longitude: 77.209
+  name: "San Francisco",
+  country: "US",
+  admin1: "California",
+  latitude: 37.7749,
+  longitude: -122.4194
 };
 
-export default function Home() {
-  const [theme, setTheme] = useLocalStorage<ThemeName>("weather-checking-theme", "dark");
+const navItems = [
+  ["Dashboard", Home],
+  ["Map", Map],
+  ["Forecast", CalendarDays],
+  ["Rain Radar", CloudRain],
+  ["Air Quality", Wind],
+  ["Alerts", Bell],
+  ["Astronomy", Moon],
+  ["Insights", Sparkles],
+  ["Activities", Activity],
+  ["Compare", Compass],
+  ["Planner", Plane],
+  ["Journal", BookOpen],
+  ["Settings", Settings]
+] as const;
+
+export default function HomePage() {
+  const [theme, setTheme] = useLocalStorage<ThemeName>("weather-checking-theme", "midnight");
   const [recent, setRecent] = useLocalStorage<GeocodingResult[]>("weather-checking-recent", []);
   const [favorites, setFavorites] = useLocalStorage<GeocodingResult[]>("weather-checking-favorites", []);
+  const [highContrast, setHighContrast] = useLocalStorage("weather-checking-contrast", false);
   const [location, setLocation] = useState<Coordinates>(defaultLocation);
   const [weather, setWeather] = useState<WeatherBundle | null>(null);
   const [results, setResults] = useState<GeocodingResult[]>([]);
-  const [status, setStatus] = useState("Loading weather intelligence");
+  const [status, setStatus] = useState("Loading local weather intelligence");
   const [mapStyle, setMapStyle] = useState<"Standard" | "Dark" | "Satellite">("Dark");
-  const [highContrast, setHighContrast] = useLocalStorage("weather-checking-contrast", false);
+  const visuals = useMemo(() => getWeatherVisuals(weather?.current), [weather]);
+  const insights = useMemo(() => (weather ? generateInsights(weather) : []), [weather]);
+  const alerts = useMemo(() => (weather ? generateAlerts(weather) : []), [weather]);
+  const scores = useMemo(() => (weather ? calculateActivityScores(weather) : []), [weather]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -70,21 +103,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const permissionAsked = localStorage.getItem("weather-checking-location-asked");
-    if (!permissionAsked && "geolocation" in navigator) {
+    const asked = localStorage.getItem("weather-checking-location-asked");
+    if (!asked && "geolocation" in navigator) {
       localStorage.setItem("weather-checking-location-asked", "true");
-      const allow = window.confirm("Allow location access for local weather?");
-      if (allow) {
+      if (window.confirm("Allow location access for local weather?")) {
         detectLocation();
         return;
       }
     }
     loadWeather(defaultLocation);
   }, []);
-
-  const insights = useMemo(() => (weather ? generateInsights(weather) : []), [weather]);
-  const alerts = useMemo(() => (weather ? generateAlerts(weather) : []), [weather]);
-  const scores = useMemo(() => (weather ? calculateActivityScores(weather) : []), [weather]);
 
   async function loadWeather(nextLocation: Coordinates) {
     try {
@@ -121,187 +149,237 @@ export default function Home() {
 
   function detectLocation() {
     if (!("geolocation" in navigator)) {
-      setStatus("Geolocation is not available in this browser");
+      setStatus("Geolocation is unavailable in this browser");
       return;
     }
-    setStatus("Requesting local coordinates");
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      (position) =>
         loadWeather({
           name: "Current Location",
           latitude: position.coords.latitude,
           longitude: position.coords.longitude
-        });
-      },
+        }),
       () => setStatus("Location permission denied. Search for a city instead."),
       { enableHighAccuracy: true, timeout: 12000 }
     );
   }
 
   return (
-    <main className={highContrast ? "app-shell high-contrast" : "app-shell"}>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="accent-gradient rounded-2xl p-3 text-slate-950">
-            <Cloud aria-hidden="true" />
-          </span>
-          <span>
-            <span className="block text-xl font-bold">Weather Checking</span>
-            <span className="text-muted text-sm">Premium Open-Meteo weather intelligence</span>
-          </span>
-        </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={() => setHighContrast(!highContrast)} className="solid-card flex items-center gap-2 rounded-full px-4 py-3">
-            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-            High contrast
-          </button>
-          <ThemeSwitcher theme={theme} onThemeChange={setTheme} />
-        </div>
-      </div>
-
-      <ErrorBoundary>
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="glass-card relative overflow-hidden rounded-[2.5rem] p-8">
-            <div className="absolute inset-0 opacity-30">
-              <div className="absolute left-10 top-10 h-48 w-48 rounded-full bg-cyan-300 blur-3xl" />
-              <div className="absolute bottom-8 right-12 h-56 w-56 rounded-full bg-violet-400 blur-3xl" />
-            </div>
-            <div className="relative">
-              <p className="text-muted text-sm uppercase tracking-[0.32em]">Live weather command center</p>
-              <h1 className="mt-4 max-w-4xl text-5xl font-bold tracking-tight md:text-7xl">
-                Forecasts, rain risk, maps, and activity scores in one premium dashboard.
-              </h1>
-              <p className="text-muted mt-5 max-w-2xl text-lg">
-                Built on Open-Meteo with local insights, privacy-first storage, responsive design, and no external AI APIs.
-              </p>
-              <div className="mt-8">
-                <SearchBox
-                  onSearch={handleSearch}
-                  onSelect={selectLocation}
-                  onLocate={detectLocation}
-                  results={results}
-                  recent={recent}
-                  favorites={favorites}
-                  onToggleFavorite={toggleFavorite}
-                />
-              </div>
-              <p className="text-muted mt-4" aria-live="polite">{status}</p>
-            </div>
-          </motion.div>
-
-          <CurrentWeatherCard weather={weather} location={location} />
-        </section>
-
-        {weather ? (
-          <>
-            <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard icon={Thermometer} label="Feels Like" value={`${Math.round(weather.current.feelsLike)}°C`} detail="Apparent temperature adjusted for humidity and wind." />
-              <StatCard icon={Droplets} label="Humidity" value={`${weather.current.humidity}%`} detail="Relative humidity at two meters above ground." />
-              <StatCard icon={Wind} label="Wind" value={`${Math.round(weather.current.windSpeed)} km/h`} detail={`${weather.current.windDirection}° directional flow.`} />
-              <StatCard icon={Umbrella} label="Rain Chance" value={`${weather.current.rainChance}%`} detail={`${weather.current.rainAmount} mm measured precipitation.`} />
-              <StatCard icon={Eye} label="Visibility" value={`${weather.current.visibility.toFixed(1)} km`} detail="Near-surface visibility from hourly model data." />
-              <StatCard icon={Gauge} label="Pressure" value={`${Math.round(weather.current.pressure)} hPa`} detail="Mean sea level pressure estimate." />
-              <StatCard icon={Cloud} label="Cloud Cover" value={`${weather.current.cloudCover}%`} detail="Total sky coverage for local conditions." />
-              <StatCard icon={Sun} label="UV Index" value={`${weather.current.uvIndex.toFixed(1)}`} detail="Peak sun exposure guidance for planning." />
-            </section>
-
-            <FeatureGrid />
-            <RainPrediction weather={weather} />
-            <Forecasts weather={weather} />
-            <DashboardCharts hourly={weather.hourly} />
-            <WeatherMap location={weather.location} mapStyle={mapStyle} onStyleChange={setMapStyle} />
-            <InsightsAlerts insights={insights} alerts={alerts} />
-            <AirAstronomy weather={weather} />
-            <GaugeGrid scores={scores} />
-            <PlanningTools weather={weather} />
-            <WeatherJournal />
-          </>
-        ) : null}
-      </ErrorBoundary>
-
-      <Footer />
+    <main className={highContrast ? "weather-product high-contrast" : "weather-product"}>
+      <div className="cinematic-bg" style={{ backgroundImage: `url("${visuals.backgroundImage}")` }} />
+      <div className="weather-noise" />
+      <WeatherParticles condition={visuals.condition} />
+      <Sidebar theme={theme} setTheme={setTheme} />
+      <section className="dashboard-stage">
+        <TopBar
+          onSearch={handleSearch}
+          onSelect={selectLocation}
+          onLocate={detectLocation}
+          results={results}
+          recent={recent}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+          status={status}
+        />
+        <ErrorBoundary>
+          <Hero weather={weather} location={location} visuals={visuals} highContrast={highContrast} setHighContrast={setHighContrast} />
+          {weather ? (
+            <>
+              <QuickStats weather={weather} />
+              <section className="dashboard-grid">
+                <ForecastPanel weather={weather} />
+                <SevenDayPanel weather={weather} />
+                <MapPanel location={weather.location} mapStyle={mapStyle} setMapStyle={setMapStyle} />
+                <InsightsPanel insights={insights} alerts={alerts} />
+                <ActivityPanel scores={scores} />
+              </section>
+              <DashboardCharts hourly={weather.hourly} />
+              <RainCenter weather={weather} />
+              <PhotographyMode weather={weather} image={visuals.sideImage} />
+              <GaugeGrid scores={scores} />
+              <PlannerJournal weather={weather} />
+            </>
+          ) : null}
+        </ErrorBoundary>
+        <Footer attribution={visuals.attribution} />
+      </section>
     </main>
   );
 }
 
-function CurrentWeatherCard({ weather, location }: { weather: WeatherBundle | null; location: Coordinates }) {
+function Sidebar({ theme, setTheme }: { theme: ThemeName; setTheme: (theme: ThemeName) => void }) {
   return (
-    <motion.aside initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="glass-card rounded-[2.5rem] p-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-muted text-sm">Current weather</p>
-          <h2 className="text-3xl font-semibold">{location.name}</h2>
-          <p className="text-muted">{[location.admin1, location.country].filter(Boolean).join(", ")}</p>
+    <aside className="premium-sidebar" aria-label="Primary navigation">
+      <Link href="/" className="brand-lockup">
+        <span className="brand-icon"><Cloud aria-hidden="true" /></span>
+        <span>
+          <span className="block font-bold">Weather Checking</span>
+          <span className="text-muted text-xs">Advanced Weather Intelligence</span>
+        </span>
+      </Link>
+      <nav className="mt-7 grid gap-1">
+        {navItems.map(([label, Icon], index) => (
+          <a key={label} href={`#${label.toLowerCase().replace(/\s+/g, "-")}`} className={index === 0 ? "nav-link active" : "nav-link"}>
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span>{label}</span>
+            {label === "Alerts" ? <span className="nav-badge">3</span> : null}
+          </a>
+        ))}
+      </nav>
+      <div className="mt-auto grid gap-4">
+        <ThemeSwitcher theme={theme} onThemeChange={setTheme} />
+        <div className="upgrade-card">
+          <Sparkles className="h-6 w-6 text-cyan-200" aria-hidden="true" />
+          <h2 className="mt-3 text-xl font-semibold">Premium Experience</h2>
+          <p className="text-muted mt-2 text-sm">Advanced maps, AI-style insights, and visual planning tools.</p>
+          <button className="accent-gradient mt-5 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-slate-950" type="button">
+            <Star className="h-4 w-4" aria-hidden="true" />
+            Upgrade Now
+          </button>
         </div>
-        {weather?.current.isDay ? <Sun className="h-10 w-10" aria-hidden="true" /> : <Moon className="h-10 w-10" aria-hidden="true" />}
       </div>
-      <div className="my-10">
-        <p className="text-8xl font-bold">{weather ? Math.round(weather.current.temperature) : "--"}°</p>
-        <p className="text-muted mt-3">Dew point {weather ? Math.round(weather.current.dewPoint) : "--"}°C</p>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <MiniMetric icon={Sunrise} label="Sunrise" value={weather ? formatTime(weather.current.sunrise) : "--"} />
-        <MiniMetric icon={Sunset} label="Sunset" value={weather ? formatTime(weather.current.sunset) : "--"} />
-        <MiniMetric icon={Navigation} label="Wind Dir" value={weather ? `${weather.current.windDirection}°` : "--"} />
-        <MiniMetric icon={Map} label="Weather Code" value={weather ? String(weather.current.weatherCode) : "--"} />
-      </div>
-    </motion.aside>
+    </aside>
   );
 }
 
-function MiniMetric({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function TopBar(props: {
+  onSearch: (query: string) => void;
+  onSelect: (location: GeocodingResult) => void;
+  onLocate: () => void;
+  results: GeocodingResult[];
+  recent: GeocodingResult[];
+  favorites: GeocodingResult[];
+  onToggleFavorite: (location: GeocodingResult) => void;
+  status: string;
+}) {
   return (
-    <div className="solid-card rounded-2xl p-4">
-      <Icon className="mb-3 h-5 w-5" aria-hidden="true" />
-      <p className="text-muted text-sm">{label}</p>
-      <p className="font-semibold">{value}</p>
-    </div>
+    <header className="top-command">
+      <div className="top-search">
+        <Search className="text-muted h-5 w-5" aria-hidden="true" />
+        <SearchBox {...props} />
+      </div>
+      <div className="top-actions">
+        <button type="button" onClick={props.onLocate} className="round-action" aria-label="Detect location"><Navigation /></button>
+        <button type="button" className="round-action" aria-label="Favorites"><Star /></button>
+        <button type="button" className="round-action with-dot" aria-label="Notifications"><Bell /></button>
+        <div className="avatar" aria-label="User profile" />
+      </div>
+    </header>
   );
 }
 
-function FeatureGrid() {
-  const features = [
-    ["Rain Prediction", Umbrella],
-    ["Hourly Forecasts", Compass],
-    ["Weather Radar", Map],
-    ["Air Quality", Wind],
-    ["UV Index", Sun],
-    ["Sunrise/Sunset", Sunrise],
-    ["Wind Analytics", Activity]
+function Hero({
+  weather,
+  location,
+  visuals,
+  highContrast,
+  setHighContrast
+}: {
+  weather: WeatherBundle | null;
+  location: Coordinates;
+  visuals: ReturnType<typeof getWeatherVisuals>;
+  highContrast: boolean;
+  setHighContrast: (value: boolean) => void;
+}) {
+  const current = weather?.current;
+  return (
+    <motion.section initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="hero-stage" id="dashboard">
+      <video className="hero-video" src={visuals.video} autoPlay muted loop playsInline poster={visuals.sideImage} />
+      <div className="hero-overlay" />
+      <div className="hero-main">
+        <div className="location-row">
+          <h1>{location.name}, {location.admin1 ? `${location.admin1}, ` : ""}{location.country ?? ""}</h1>
+          <Navigation className="h-4 w-4" aria-hidden="true" />
+        </div>
+        <p className="text-sm text-slate-200">{formatDate(new Date())} <span className="mx-3"> </span> {formatClock(new Date())} <span className="live-pill">Live</span></p>
+        <div className="current-row">
+          <p className="hero-temp">{current ? Math.round(current.temperature) : "--"}<span>°C</span></p>
+          <AnimatedWeatherIcon condition={visuals.condition} />
+          <div>
+            <h2 className="text-2xl font-semibold">{visuals.condition}</h2>
+            <p className="mt-2 max-w-xs text-slate-200">
+              {current ? recommendation(current, visuals.condition) : "Loading local conditions and insights."}
+            </p>
+          </div>
+        </div>
+        <div className="hero-metrics">
+          <HeroMetric icon={Droplets} label="Humidity" value={`${current?.humidity ?? "--"}%`} />
+          <HeroMetric icon={Wind} label="Wind" value={`${Math.round(current?.windSpeed ?? 0)} km/h`} />
+          <HeroMetric icon={Eye} label="Visibility" value={`${current?.visibility.toFixed(0) ?? "--"} km`} />
+          <HeroMetric icon={Gauge} label="Pressure" value={`${Math.round(current?.pressure ?? 0)} hPa`} />
+          <HeroMetric icon={Sun} label="UV Index" value={`${current?.uvIndex.toFixed(1) ?? "--"}`} />
+        </div>
+      </div>
+      <aside className="sunset-card" style={{ backgroundImage: `url("${visuals.sideImage}")` }}>
+        <div>
+          <p className="text-sm">Sunset</p>
+          <p className="mt-1 text-2xl font-semibold">{current ? formatClock(new Date(current.sunset)) : "--"}</p>
+          <p className="mt-2 text-sm text-amber-100">Golden hour</p>
+          <p className="text-sm text-slate-200">{current ? `${formatClock(new Date(current.sunset))} window` : "Calculating"}</p>
+        </div>
+      </aside>
+      <button type="button" onClick={() => setHighContrast(!highContrast)} className="contrast-chip">
+        <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+        High contrast
+      </button>
+    </motion.section>
+  );
+}
+
+function QuickStats({ weather }: { weather: WeatherBundle }) {
+  const stats = [
+    ["Air Quality", String(weather.airQuality.aqi), "Good", Wind],
+    ["Rain Chance", `${weather.current.rainChance}%`, getRainRisk(weather.current.rainChance, weather.current.rainAmount), Umbrella],
+    ["Feels Like", `${Math.round(weather.current.feelsLike)}°C`, "Comfort index", Thermometer],
+    ["Dew Point", `${Math.round(weather.current.dewPoint)}°C`, "Moisture level", Droplets]
   ] as const;
   return (
-    <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {features.map(([label, Icon]) => (
-        <article key={label} className="glass-card rounded-[1.5rem] p-5">
-          <Icon className="mb-4 h-6 w-6" aria-hidden="true" />
-          <h3 className="font-semibold">{label}</h3>
-          <p className="text-muted mt-2 text-sm">Responsive premium module included in the dashboard.</p>
+    <section className="quick-stat-row">
+      {stats.map(([label, value, detail, Icon]) => (
+        <article key={label} className="premium-panel metric-card">
+          <Icon className="h-5 w-5 text-cyan-200" aria-hidden="true" />
+          <p className="text-muted mt-3 text-sm">{label}</p>
+          <p className="mt-1 text-3xl font-semibold">{value}</p>
+          <p className="text-sm text-emerald-300">{detail}</p>
         </article>
       ))}
     </section>
   );
 }
 
-function RainPrediction({ weather }: { weather: WeatherBundle }) {
-  const risk = getRainRisk(weather.current.rainChance, weather.current.rainAmount);
-  const maxRain = Math.max(...weather.hourly.map((hour) => hour.precipitation));
-  const confidence = Math.min(98, Math.round(55 + weather.current.rainChance * 0.35 + maxRain * 2));
+function ForecastPanel({ weather }: { weather: WeatherBundle }) {
   return (
-    <section className="glass-card mt-6 rounded-[2rem] p-6">
-      <p className="text-muted text-sm">Rain prediction center</p>
-      <h2 className="text-2xl font-semibold">Risk level: {risk}</h2>
-      <div className="mt-5 grid gap-4 md:grid-cols-4">
-        <StatCard icon={Umbrella} label="Probability" value={`${weather.current.rainChance}%`} detail="Nearest-hour model probability." />
-        <StatCard icon={Droplets} label="Expected Rainfall" value={`${maxRain.toFixed(1)} mm`} detail="Maximum hourly precipitation." />
-        <StatCard icon={Gauge} label="Intensity" value={maxRain > 8 ? "Heavy" : maxRain > 2 ? "Moderate" : "Light"} detail="Classified from precipitation rate." />
-        <StatCard icon={ShieldCheck} label="Confidence" value={`${confidence}%`} detail="Local heuristic from rain agreement." />
+    <section className="premium-panel forecast-panel" id="forecast">
+      <h2>24-Hour Forecast</h2>
+      <div className="hour-strip">
+        {weather.hourly.slice(0, 12).map((hour, index) => (
+          <article key={hour.time} className="hour-card">
+            <p className="text-xs">{index === 0 ? "Now" : formatClock(new Date(hour.time))}</p>
+            <Cloud className="mx-auto my-3 h-7 w-7 text-slate-200" aria-hidden="true" />
+            <p className="text-xl font-bold">{Math.round(hour.temperature)}°</p>
+            <div className="sparkline" style={{ transform: `translateY(${Math.max(-8, 8 - hour.temperature / 2)}px)` }} />
+            <p className="mt-3 text-xs text-sky-300">{hour.rainProbability}%</p>
+          </article>
+        ))}
       </div>
-      <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-        {weather.hourly.slice(0, 12).map((hour) => (
-          <div key={hour.time} className="solid-card min-w-32 rounded-2xl p-4">
-            <p className="text-sm font-semibold">{formatTime(hour.time)}</p>
-            <p className="mt-2 text-2xl">{hour.rainProbability}%</p>
-            <p className="text-muted text-sm">{hour.precipitation} mm</p>
+    </section>
+  );
+}
+
+function SevenDayPanel({ weather }: { weather: WeatherBundle }) {
+  return (
+    <section className="premium-panel seven-day">
+      <div className="flex items-center justify-between">
+        <h2>7-Day Forecast</h2>
+        <button type="button" className="text-sm text-sky-300">View all</button>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {weather.daily.slice(0, 7).map((day) => (
+          <div key={day.date} className="day-row">
+            <span>{new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric" }).format(new Date(day.date))}</span>
+            <Sun className="h-4 w-4 text-amber-300" aria-hidden="true" />
+            <span>{Math.round(day.temperatureMax)}° / {Math.round(day.temperatureMin)}°</span>
+            <span className="text-sky-300">{day.rainProbability}%</span>
           </div>
         ))}
       </div>
@@ -309,128 +387,162 @@ function RainPrediction({ weather }: { weather: WeatherBundle }) {
   );
 }
 
-function Forecasts({ weather }: { weather: WeatherBundle }) {
+function MapPanel({ location, mapStyle, setMapStyle }: { location: Coordinates; mapStyle: "Standard" | "Dark" | "Satellite"; setMapStyle: (style: "Standard" | "Dark" | "Satellite") => void }) {
   return (
-    <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_1.2fr]">
-      <div className="glass-card rounded-[2rem] p-6">
-        <h2 className="text-2xl font-semibold">24-hour forecast</h2>
-        <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-          {weather.hourly.map((hour) => (
-            <article key={hour.time} className="solid-card min-w-36 rounded-2xl p-4">
-              <p className="text-muted text-sm">{formatTime(hour.time)}</p>
-              <p className="mt-2 text-3xl font-semibold">{Math.round(hour.temperature)}°</p>
-              <p className="text-muted text-sm">{hour.rainProbability}% rain</p>
+    <section className="map-shell" id="map">
+      <WeatherMap location={location} mapStyle={mapStyle} onStyleChange={setMapStyle} />
+    </section>
+  );
+}
+
+function InsightsPanel({ insights, alerts }: { insights: string[]; alerts: ReturnType<typeof generateAlerts> }) {
+  const cards = [
+    ...insights.slice(0, 4).map((text, index) => ({ title: text.split(".")[0], detail: text, icon: [Umbrella, Heart, Sun, Navigation][index] ?? Sparkles, tone: "text-cyan-200" })),
+    ...alerts.slice(0, 2).map((alert) => ({ title: alert.type, detail: alert.message, icon: AlertTriangle, tone: "text-amber-300" }))
+  ];
+  return (
+    <section className="premium-panel insights-panel" id="insights">
+      <h2>Weather Insights</h2>
+      <div className="mt-4 grid gap-3">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <article key={`${card.title}-${card.detail}`} className="insight-row">
+              <span className="insight-icon"><Icon className={`h-5 w-5 ${card.tone}`} aria-hidden="true" /></span>
+              <span>
+                <span className="block font-semibold">{card.title}</span>
+                <span className="text-muted text-sm">{card.detail}</span>
+              </span>
             </article>
-          ))}
-        </div>
+          );
+        })}
       </div>
-      <div className="glass-card rounded-[2rem] p-6">
-        <h2 className="text-2xl font-semibold">14-day daily and weekly forecast</h2>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {weather.daily.map((day) => (
-            <article key={day.date} className="solid-card rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date(day.date))}</p>
-                <p>{Math.round(day.temperatureMin)}° / {Math.round(day.temperatureMax)}°</p>
+    </section>
+  );
+}
+
+function ActivityPanel({ scores }: { scores: ReturnType<typeof calculateActivityScores> }) {
+  const icons = [Activity, Bike, Umbrella, Camera, Moon, Navigation];
+  return (
+    <section className="premium-panel activity-panel" id="activities">
+      <div className="flex items-center justify-between">
+        <h2>Activity Scores</h2>
+        <button type="button" className="text-sm text-sky-300">See all</button>
+      </div>
+      <div className="activity-grid">
+        {scores.slice(0, 6).map((item, index) => {
+          const Icon = icons[index] ?? Activity;
+          return (
+            <article key={item.name} className="activity-score">
+              <div className="small-gauge" style={{ background: `conic-gradient(var(--accent) ${item.score * 3.6}deg, rgba(255,255,255,.12) 0deg)` }}>
+                <Icon className="h-5 w-5" aria-hidden="true" />
               </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-500/20">
-                <div className="h-full rounded-full accent-gradient" style={{ width: `${day.rainProbability}%` }} />
-              </div>
-              <p className="text-muted mt-2 text-sm">{day.rainProbability}% rain, UV {day.uvIndex.toFixed(1)}</p>
+              <p className="text-xs">{item.name}</p>
+              <p className="text-xl font-bold">{Math.round(item.score / 10)}/10</p>
+              <p className="text-xs text-emerald-300">{item.score > 80 ? "Excellent" : item.score > 60 ? "Good" : "Caution"}</p>
             </article>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function InsightsAlerts({ insights, alerts }: { insights: string[]; alerts: ReturnType<typeof generateAlerts> }) {
+function RainCenter({ weather }: { weather: WeatherBundle }) {
+  const maxRain = Math.max(...weather.hourly.map((hour) => hour.precipitation), 0);
   return (
-    <section className="mt-6 grid gap-6 lg:grid-cols-2">
-      <div className="glass-card rounded-[2rem] p-6">
-        <h2 className="text-2xl font-semibold">AI Insights Engine</h2>
-        <p className="text-muted mt-2">Generated locally from weather data. No external AI APIs are used.</p>
-        <div className="mt-4 grid gap-3">
-          {insights.map((insight) => (
-            <article key={insight} className="solid-card rounded-2xl p-4">{insight}</article>
-          ))}
-        </div>
-      </div>
-      <div className="glass-card rounded-[2rem] p-6">
-        <h2 className="text-2xl font-semibold">Weather Alerts</h2>
-        <div className="mt-4 grid gap-3">
-          {alerts.length ? alerts.map((alert) => (
-            <article key={`${alert.type}-${alert.message}`} className="solid-card rounded-2xl p-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="text-amber-300" aria-hidden="true" />
-                <p className="font-semibold">{alert.type} {alert.severity}</p>
-              </div>
-              <p className="text-muted mt-2">{alert.message}</p>
-            </article>
-          )) : <article className="solid-card rounded-2xl p-4">No active alerts from local rules.</article>}
-        </div>
+    <section className="premium-panel mt-6" id="rain-radar">
+      <h2>Rain Prediction Center</h2>
+      <div className="mt-4 grid gap-4 md:grid-cols-4">
+        <MetricTile label="Risk" value={getRainRisk(weather.current.rainChance, weather.current.rainAmount)} icon={CloudRain} />
+        <MetricTile label="Probability" value={`${weather.current.rainChance}%`} icon={Umbrella} />
+        <MetricTile label="Expected Rainfall" value={`${maxRain.toFixed(1)} mm`} icon={Droplets} />
+        <MetricTile label="Confidence" value={`${Math.min(98, Math.round(55 + weather.current.rainChance * 0.35 + maxRain * 2))}%`} icon={ShieldCheck} />
       </div>
     </section>
   );
 }
 
-function AirAstronomy({ weather }: { weather: WeatherBundle }) {
-  const sunrise = new Date(weather.current.sunrise);
-  const sunset = new Date(weather.current.sunset);
-  const dayLength = Math.max(0, sunset.getTime() - sunrise.getTime()) / 36e5;
+function PhotographyMode({ weather, image }: { weather: WeatherBundle; image: string }) {
+  const score = Math.max(20, Math.min(98, Math.round(100 - weather.current.cloudCover * 0.35 - weather.current.rainChance * 0.4 + weather.current.uvIndex * 2)));
   return (
-    <section className="mt-6 grid gap-6 lg:grid-cols-2">
-      <div className="glass-card rounded-[2rem] p-6">
-        <h2 className="text-2xl font-semibold">Air Quality</h2>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <StatCard icon={Gauge} label="AQI" value={String(weather.airQuality.aqi)} detail="US AQI estimate." />
-          <StatCard icon={Droplets} label="PM2.5" value={`${weather.airQuality.pm25.toFixed(1)}`} detail="Fine particulate matter." />
-          <StatCard icon={Cloud} label="PM10" value={`${weather.airQuality.pm10.toFixed(1)}`} detail="Coarse particulate matter." />
-          <StatCard icon={Wind} label="NO2 / CO" value={`${weather.airQuality.nitrogenDioxide.toFixed(1)} / ${weather.airQuality.carbonMonoxide.toFixed(0)}`} detail="Gas concentration indicators." />
-        </div>
+    <section className="photo-mode" id="astronomy" style={{ backgroundImage: `linear-gradient(90deg, rgba(4,10,25,.84), rgba(4,10,25,.35)), url("${image}")` }}>
+      <div>
+        <p className="text-muted text-sm">Weather Photography Mode</p>
+        <h2 className="mt-2 text-3xl font-semibold">Golden hour and landscape readiness</h2>
+        <p className="mt-3 max-w-2xl text-slate-200">Uses sunrise, sunset, cloud cover, rain chance, and UV data to estimate shooting quality.</p>
       </div>
-      <div className="glass-card rounded-[2rem] p-6">
-        <h2 className="text-2xl font-semibold">Astronomy Center</h2>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <StatCard icon={Sunrise} label="Sunrise" value={formatTime(weather.current.sunrise)} detail="Local first light estimate." />
-          <StatCard icon={Sunset} label="Sunset" value={formatTime(weather.current.sunset)} detail="Local evening transition." />
-          <StatCard icon={Moon} label="Moon Phase" value={moonPhaseName()} detail="Approximate lunar phase calculation." />
-          <StatCard icon={Sun} label="Day Length" value={`${dayLength.toFixed(1)} h`} detail="Computed from sunrise and sunset." />
-        </div>
+      <div className="photo-grid">
+        <MetricTile label="Golden Hour" value={formatClock(new Date(weather.current.sunset))} icon={Sunset} />
+        <MetricTile label="Blue Hour" value={formatClock(new Date(new Date(weather.current.sunset).getTime() + 28 * 60000))} icon={Moon} />
+        <MetricTile label="Cloud Rating" value={`${100 - weather.current.cloudCover}%`} icon={Cloud} />
+        <MetricTile label="Photo Rating" value={`${score}%`} icon={Camera} />
       </div>
     </section>
   );
 }
 
-function PlanningTools({ weather }: { weather: WeatherBundle }) {
+function PlannerJournal({ weather }: { weather: WeatherBundle }) {
   return (
-    <section className="glass-card mt-6 rounded-[2rem] p-6">
-      <h2 className="text-2xl font-semibold">Comparison, travel, and photography planner</h2>
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
-        <article className="solid-card rounded-2xl p-5">
-          <h3 className="font-semibold">Weather Comparison</h3>
-          <p className="text-muted mt-2">Compare saved favorites side-by-side by selecting cities from search results.</p>
-        </article>
-        <article className="solid-card rounded-2xl p-5">
-          <h3 className="font-semibold">Travel Weather Planner</h3>
-          <p className="text-muted mt-2">Use the 14-day destination forecast to evaluate expected trip conditions.</p>
-        </article>
-        <article className="solid-card rounded-2xl p-5">
-          <h3 className="font-semibold">Weather Photography Mode</h3>
-          <p className="text-muted mt-2">
-            Golden hour near {formatTime(weather.current.sunrise)} and {formatTime(weather.current.sunset)}. Cloud cover is {weather.current.cloudCover}%.
-          </p>
-        </article>
+    <section className="planner-row" id="planner">
+      <article className="premium-panel cta-card">
+        <Plane className="h-10 w-10 text-sky-300" aria-hidden="true" />
+        <h2>Travel Planner</h2>
+        <p className="text-muted">Plan your trip with confidence using the 14-day destination forecast for {weather.location.name}.</p>
+      </article>
+      <article className="premium-panel cta-card" id="compare">
+        <Compass className="h-10 w-10 text-violet-300" aria-hidden="true" />
+        <h2>Compare Cities</h2>
+        <p className="text-muted">Use favorites and recent searches to quickly compare weather windows across locations.</p>
+      </article>
+      <div id="journal">
+        <WeatherJournal />
       </div>
     </section>
   );
 }
 
-function Footer() {
+function WeatherParticles({ condition }: { condition: string }) {
+  const count = condition === "Rain" ? 34 : condition === "Snow" ? 28 : 18;
   return (
-    <footer className="mt-10 flex flex-col justify-between gap-4 border-t border-white/10 py-8 md:flex-row">
-      <p className="text-muted">Weather Checking uses Open-Meteo APIs and stores preferences locally.</p>
+    <div className={`particle-layer ${condition.toLowerCase().replace(/\s+/g, "-")}`} aria-hidden="true">
+      {Array.from({ length: count }).map((_, index) => <span key={index} style={{ "--i": index } as React.CSSProperties} />)}
+    </div>
+  );
+}
+
+function AnimatedWeatherIcon({ condition }: { condition: string }) {
+  const Icon = condition.includes("Rain") ? CloudRain : condition.includes("Night") ? Moon : condition.includes("Clear") ? Sun : Cloud;
+  return (
+    <div className="weather-orb">
+      <Icon className="h-20 w-20" aria-hidden="true" />
+    </div>
+  );
+}
+
+function HeroMetric({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="hero-metric">
+      <Icon className="h-5 w-5" aria-hidden="true" />
+      <span><span className="text-muted block text-xs">{label}</span>{value}</span>
+    </div>
+  );
+}
+
+function MetricTile({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <article className="metric-tile">
+      <Icon className="h-5 w-5 text-cyan-200" aria-hidden="true" />
+      <p className="text-muted mt-3 text-sm">{label}</p>
+      <p className="mt-1 text-xl font-semibold">{value}</p>
+    </article>
+  );
+}
+
+function Footer({ attribution }: { attribution: string }) {
+  return (
+    <footer className="mt-8 flex flex-col justify-between gap-4 py-8 text-sm text-slate-300 md:flex-row">
+      <p>{attribution}</p>
       <nav className="flex flex-wrap gap-4" aria-label="Footer navigation">
         <Link href="/privacy-policy">Privacy Policy</Link>
         <Link href="/terms-and-conditions">Terms and Conditions</Link>
@@ -441,16 +553,17 @@ function Footer() {
   );
 }
 
-function formatTime(value: string) {
-  if (!value) return "--";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function recommendation(current: NonNullable<WeatherBundle["current"]>, condition: string) {
+  if (current.rainChance > 60) return "Rain risk is elevated. Carry waterproof layers and avoid exposed evening plans.";
+  if (current.windSpeed > 35) return "Winds are strong enough to affect cycling, drones, and outdoor setup.";
+  if (current.uvIndex > 7) return "UV levels are high. Schedule outdoor work before midday or after golden hour.";
+  return `${condition} conditions support outdoor planning with comfortable visibility and manageable wind.`;
 }
 
-function moonPhaseName() {
-  const lp = 2551443;
-  const now = new Date();
-  const newMoon = new Date("2001-01-01T00:00:00Z");
-  const phase = ((now.getTime() - newMoon.getTime()) / 1000) % lp;
-  const index = Math.floor((phase / lp) * 8);
-  return ["New", "Waxing Crescent", "First Quarter", "Waxing Gibbous", "Full", "Waning Gibbous", "Last Quarter", "Waning Crescent"][index];
+function formatClock(date: Date) {
+  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function formatDate(date: Date) {
+  return new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(date);
 }

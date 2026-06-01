@@ -31,3 +31,8 @@ npm start
 ## Deploy
 
 The app can deploy to Vercel, Netlify, or GitHub Pages. No API keys are required because Open-Meteo APIs are public.
+
+## Media Attribution
+
+- Animated banner video: `Clouds at sunset (time lapse).webm`, Wikimedia Commons, CC BY 3.0.
+- Dynamic scenic images are requested from Unsplash Source based on weather condition.

@@ -14,7 +14,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     } catch {
       setValue(initialValue);
     }
-  }, [initialValue, key]);
+  }, [key]);
 
   useEffect(() => {
     try {

@@ -1,6 +1,7 @@
 "use client";
 
-import { MapContainer, Marker, Popup, TileLayer, Circle } from "react-leaflet";
+import { useEffect, useRef } from "react";
+import * as L from "leaflet";
 import { Layers } from "lucide-react";
 import type { Coordinates } from "@/types/weather";
 
@@ -19,17 +20,62 @@ export function WeatherMap({
   mapStyle: keyof typeof tileStyles;
   onStyleChange: (style: keyof typeof tileStyles) => void;
 }) {
-  const nearby = [
-    { name: "North cell", latitude: location.latitude + 0.2, longitude: location.longitude + 0.16 },
-    { name: "Wind front", latitude: location.latitude - 0.18, longitude: location.longitude - 0.12 }
-  ];
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!elementRef.current) return;
+
+    const markerIcon = L.divIcon({
+      className: "weather-map-marker",
+      html: "<span></span>",
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    const map = L.map(elementRef.current, {
+      center: [location.latitude, location.longitude],
+      zoom: 9,
+      zoomControl: true,
+      scrollWheelZoom: true
+    });
+    mapRef.current = map;
+
+    L.tileLayer(tileStyles[mapStyle], {
+      attribution: "OpenStreetMap, CARTO, Esri contributors"
+    }).addTo(map);
+
+    L.marker([location.latitude, location.longitude], { icon: markerIcon }).addTo(map).bindPopup(location.name);
+    [
+      { name: "Rain layer", lat: location.latitude + 0.12, lon: location.longitude - 0.08, color: "#38bdf8", radius: 16000 },
+      { name: "Temperature layer", lat: location.latitude - 0.1, lon: location.longitude + 0.12, color: "#f97316", radius: 12000 },
+      { name: "Wind layer", lat: location.latitude + 0.2, lon: location.longitude + 0.16, color: "#34d399", radius: 10000 },
+      { name: "Cloud layer", lat: location.latitude - 0.18, lon: location.longitude - 0.12, color: "#a78bfa", radius: 13500 }
+    ].forEach((layer) => {
+      L.circle([layer.lat, layer.lon], {
+        radius: layer.radius,
+        color: layer.color,
+        fillColor: layer.color,
+        fillOpacity: 0.16,
+        weight: 2
+      }).addTo(map).bindPopup(layer.name);
+      L.marker([layer.lat, layer.lon], { icon: markerIcon }).addTo(map).bindPopup(layer.name);
+    });
+
+    requestAnimationFrame(() => map.invalidateSize());
+
+    return () => {
+      mapRef.current = null;
+      map.remove();
+    };
+  }, [location.latitude, location.longitude, location.name, mapStyle]);
 
   return (
     <section className="glass-card overflow-hidden rounded-[2rem] p-4" aria-label="Interactive weather map">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-muted text-sm">Weather map</p>
-          <h2 className="text-2xl font-semibold">Radar, temperature, and wind layers</h2>
+          <h2 className="text-2xl font-semibold">Radar, temperature, wind, and cloud layers</h2>
         </div>
         <div className="flex flex-wrap gap-2">
           {(Object.keys(tileStyles) as Array<keyof typeof tileStyles>).map((style) => (
@@ -45,20 +91,7 @@ export function WeatherMap({
           ))}
         </div>
       </div>
-      <MapContainer center={[location.latitude, location.longitude]} zoom={9} scrollWheelZoom>
-        <TileLayer attribution="OpenStreetMap contributors" url={tileStyles[mapStyle]} />
-        <Marker position={[location.latitude, location.longitude]}>
-          <Popup>{location.name}</Popup>
-        </Marker>
-        {nearby.map((place) => (
-          <Marker key={place.name} position={[place.latitude, place.longitude]}>
-            <Popup>{place.name}</Popup>
-          </Marker>
-        ))}
-        <Circle center={[location.latitude, location.longitude]} radius={16000} pathOptions={{ color: "#38bdf8", fillOpacity: 0.12 }} />
-        <Circle center={[location.latitude + 0.12, location.longitude - 0.08]} radius={9000} pathOptions={{ color: "#f472b6", fillOpacity: 0.14 }} />
-        <Circle center={[location.latitude - 0.1, location.longitude + 0.12]} radius={12000} pathOptions={{ color: "#34d399", fillOpacity: 0.12 }} />
-      </MapContainer>
+      <div ref={elementRef} className="leaflet-container" />
     </section>
   );
 }
