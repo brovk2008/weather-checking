@@ -6,9 +6,9 @@ import { Layers } from "lucide-react";
 import type { Coordinates } from "@/types/weather";
 
 const tileStyles = {
-  Standard: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  Dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  Satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+  Standard: "standard",
+  Dark: "dark",
+  Satellite: "satellite"
 };
 
 export function WeatherMap({
@@ -41,9 +41,7 @@ export function WeatherMap({
     });
     mapRef.current = map;
 
-    L.tileLayer(tileStyles[mapStyle], {
-      attribution: "OpenStreetMap, CARTO, Esri contributors"
-    }).addTo(map);
+    createWeatherTileLayer(mapStyle).addTo(map);
 
     L.marker([location.latitude, location.longitude], { icon: markerIcon }).addTo(map).bindPopup(location.name);
     [
@@ -94,4 +92,53 @@ export function WeatherMap({
       <div ref={elementRef} className="leaflet-container" />
     </section>
   );
+}
+
+function createWeatherTileLayer(style: keyof typeof tileStyles) {
+  const WeatherGridLayer = L.GridLayer.extend({
+    createTile(coords: L.Coords) {
+      const tile = document.createElement("canvas");
+      tile.width = 256;
+      tile.height = 256;
+      const context = tile.getContext("2d");
+      if (!context) return tile;
+
+      const hueBase = style === "Satellite" ? 128 : style === "Dark" ? 218 : 194;
+      const gradient = context.createLinearGradient(0, 0, 256, 256);
+      gradient.addColorStop(0, style === "Dark" ? "#081528" : style === "Satellite" ? "#183726" : "#12324a");
+      gradient.addColorStop(0.55, style === "Dark" ? "#0e2440" : style === "Satellite" ? "#49612d" : "#1c6b83");
+      gradient.addColorStop(1, style === "Dark" ? "#150d2f" : style === "Satellite" ? "#172a3d" : "#24356f");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, 256, 256);
+
+      for (let row = -32; row < 300; row += 24) {
+        context.beginPath();
+        for (let x = -20; x < 280; x += 20) {
+          const y = row + Math.sin((x + coords.x * 13 + coords.y * 7) / 36) * 10;
+          if (x === -20) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        }
+        context.strokeStyle = `hsla(${hueBase + row / 8}, 85%, 68%, .16)`;
+        context.lineWidth = 1.3;
+        context.stroke();
+      }
+
+      for (let index = 0; index < 42; index += 1) {
+        const x = (index * 47 + coords.x * 31) % 256;
+        const y = (index * 29 + coords.y * 23) % 256;
+        const radius = 24 + ((index + coords.z) % 7) * 8;
+        const cell = context.createRadialGradient(x, y, 0, x, y, radius);
+        cell.addColorStop(0, `hsla(${hueBase + index * 7}, 90%, 62%, .18)`);
+        cell.addColorStop(1, "transparent");
+        context.fillStyle = cell;
+        context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      }
+
+      context.strokeStyle = "rgba(255,255,255,.12)";
+      context.lineWidth = 1;
+      context.strokeRect(0, 0, 256, 256);
+      return tile;
+    }
+  }) as unknown as new (options: L.GridLayerOptions) => L.GridLayer;
+  return new WeatherGridLayer({ tileSize: 256, opacity: 0.96 });
 }

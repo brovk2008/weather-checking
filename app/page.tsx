@@ -291,7 +291,9 @@ function Hero({
           <h1>{location.name}, {location.admin1 ? `${location.admin1}, ` : ""}{location.country ?? ""}</h1>
           <Navigation className="h-4 w-4" aria-hidden="true" />
         </div>
-        <p className="text-sm text-slate-200">{formatDate(new Date())} <span className="mx-3"> </span> {formatClock(new Date())} <span className="live-pill">Live</span></p>
+        <p className="text-sm text-slate-200" suppressHydrationWarning>
+          {formatDate(new Date())} <span className="mx-3"> </span> {formatClock(new Date())} <span className="live-pill">Live</span>
+        </p>
         <div className="current-row">
           <p className="hero-temp">{current ? Math.round(current.temperature) : "--"}<span>°C</span></p>
           <AnimatedWeatherIcon condition={visuals.condition} />
